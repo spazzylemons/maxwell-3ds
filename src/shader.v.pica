@@ -1,0 +1,29 @@
+.fvec projection[4], model_view[4]
+
+.constf ones(1.0, 1.0, 1.0, 1.0)
+
+.alias inpos v0
+.alias intex v1
+
+; Outputs
+.out outpos position
+.out outtc0 texcoord0
+.out outclr color
+
+.proc main
+    ; apply matrices
+    mov r0, inpos
+    mov r0.w, ones
+    dp4 r1.x, model_view[0], r0
+    dp4 r1.y, model_view[1], r0
+    dp4 r1.z, model_view[2], r0
+    dp4 r1.w, model_view[3], r0
+    dp4 outpos.x, projection[0], r1
+    dp4 outpos.y, projection[1], r1
+    dp4 outpos.z, projection[2], r1
+    dp4 outpos.w, projection[3], r1
+    ; other info is sent directly - no shading
+    mov outtc0, intex
+    mov outclr, ones
+    end
+.end

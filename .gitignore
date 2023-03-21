@@ -1,2 +1,5 @@
 build
+maxwell.3dsx
 maxwell.elf
+gfx/maxwell.blend1
+src/maxwell.c
