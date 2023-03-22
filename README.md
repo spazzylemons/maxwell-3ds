@@ -14,6 +14,8 @@ This project is licensed under the GNU General Public License, version 3 or late
 
 Original model can be found [here](https://sketchfab.com/3d-models/dingus-the-cat-2ca7f3c1957847d6a145fc35de9046b0).
 
+The music is Stockmarket by Weebls.
+
 ## Disclaimer
 
 This project is not licensed by Nintendo.

@@ -2,25 +2,23 @@
 #![feature(maybe_uninit_write_slice)]
 #![feature(new_uninit)]
 
-use std::{cell::RefMut, mem::MaybeUninit, f32::consts::{TAU, PI}, ffi::CString};
+use std::{cell::RefMut, mem::MaybeUninit, f32::consts::{TAU, PI}, ffi::CString, io::Cursor};
 
 use citro3d::render::ClearFlags;
-use ctru::{prelude::*, gfx::TopScreen3D, linear::LinearAllocator, services::gspgpu::FramebufferFormat};
+use ctru::{prelude::*, gfx::TopScreen3D, linear::LinearAllocator, services::{gspgpu::FramebufferFormat, ndsp::{Ndsp, OutputMode, InterpolationType, AudioFormat, wave::WaveInfo}}};
+use symphonia::core::{io::{MediaSourceStream, MediaSourceStreamOptions}, codecs::{CodecRegistry, CODEC_TYPE_NULL, DecoderOptions}, probe::Hint, meta::MetadataOptions, formats::FormatOptions, audio::SampleBuffer};
 
 include!(concat!(env!("OUT_DIR"), "/maxwell.rs"));
 
-// TODO
 static SHADER: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/shader.shbin"));
-// TODO
-static VERTICES: &[f32] = MAXWELL_MODEL.vertices;
-// TODO
-static BODY_INDICES: &[u16] = MAXWELL_MODEL.body;
-// TODO
-static WHISKERS_INDICES: &[u16] = MAXWELL_MODEL.whiskers;
-// TODO
 static BODY_TEXTURE: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/body.t3x"));
-// TODO
 static WHISKERS_TEXTURE: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/whiskers.t3x"));
+
+static VERTICES: &[f32] = MAXWELL_MODEL.vertices;
+static BODY_INDICES: &[u16] = MAXWELL_MODEL.body;
+static WHISKERS_INDICES: &[u16] = MAXWELL_MODEL.whiskers;
+
+static MUSIC_OGG: &[u8] = include_bytes!(concat!(env!("CARGO_MANIFEST_DIR"), "/assets/maxwell.ogg"));
 
 struct Material {
     vao: Box<[u16], LinearAllocator>,
@@ -192,10 +190,86 @@ impl Scene {
     }
 }
 
+// TODO can this be done streaming until it completes?
+fn decode_audio() -> Box<[u8], LinearAllocator> {
+    let mut result = Vec::<u8, LinearAllocator>::new_in(LinearAllocator);
+
+    let src = Cursor::new(MUSIC_OGG);
+    let mss = MediaSourceStream::new(Box::new(src), Default::default());
+
+    let mut hint = Hint::new();
+    hint.with_extension("ogg");
+
+    let meta_ops = MetadataOptions::default();
+    let fmt_opts = FormatOptions::default();
+
+    let probed = symphonia::default::get_probe()
+        .format(&hint, mss, &fmt_opts, &meta_ops)
+        .unwrap();
+
+    let mut format = probed.format;
+
+    let track = format
+        .tracks()
+        .iter()
+        .find(|t| t.codec_params.codec != CODEC_TYPE_NULL)
+        .unwrap();
+
+    let dec_opts = DecoderOptions::default();
+
+    let mut decoder = symphonia::default::get_codecs()
+        .make(&track.codec_params, &dec_opts)
+        .unwrap();
+
+    let mut sample_buf = None;
+    loop {
+        let packet = match format.next_packet() {
+            Ok(packet) => packet,
+            Err(_) => break,
+        };
+
+        let audio_buf = decoder.decode(&packet).unwrap();
+
+        if sample_buf.is_none() {
+            let spec = *audio_buf.spec();
+            let duration = audio_buf.capacity() as u64;
+            sample_buf = Some(SampleBuffer::<i16>::new(duration, spec));
+        }
+
+        if let Some(buf) = &mut sample_buf {
+            let frames = audio_buf.frames();
+            buf.copy_planar_ref(audio_buf);
+            // TODO faster way to do this?
+            for frame in &buf.samples()[0..frames] {
+                result.extend_from_slice(&frame.to_ne_bytes());
+            }
+        }
+    }
+
+    result.into_boxed_slice()
+}
+
 fn main() {
+    ctru::use_panic_handler();
+
     let gfx = Gfx::init().unwrap();
     let apt = Apt::init().unwrap();
     let hid = Hid::init().unwrap();
+    let mut ndsp = Ndsp::init().unwrap();
+    ndsp.set_output_mode(OutputMode::Mono);
+
+    let channel = ndsp.channel(0).unwrap();
+    channel.reset();
+    channel.set_interpolation(InterpolationType::Polyphase);
+    channel.set_sample_rate(48000.0);
+    channel.set_format(AudioFormat::PCM16Mono);
+
+    let audio_buffer = decode_audio();
+    let mut wave_info = WaveInfo::new(audio_buffer, AudioFormat::PCM16Mono, true);
+    channel.queue_wave(&mut wave_info).unwrap();
+    channel.set_paused(false);
+
+    let _console = Console::init(gfx.bottom_screen.borrow_mut());
 
     let top_screen = TopScreen3D::from(&gfx.top_screen);
     let (mut left, mut right) = top_screen.split_mut();
