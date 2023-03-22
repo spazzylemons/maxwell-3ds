@@ -1,0 +1,3 @@
+[toolchain]
+channel = "nightly"
+targets = ["armv6k-nintendo-3ds"]

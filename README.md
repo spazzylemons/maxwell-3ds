@@ -4,11 +4,7 @@ Displays Maxwell the cat on your 3DS.
 
 ## Building
 
-You will need Blender and the 3DS devKitPro tools.
-
-To parse the model, you must add `scripts/model_convert.py` as an addon in
-Blender. Then, open `gfx/maxwell.blend`, go to `File > Export > Export Maxwell`,
-and save as `src/maxwell.c`. Then run `make`.
+You will the 3DS devKitPro tools and [cargo-3ds](https://github.com/rust3ds/cargo-3ds).
 
 ## License
 
