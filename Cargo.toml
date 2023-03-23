@@ -1,7 +1,16 @@
+cargo-features = ["profile-rustflags"]
+
 [package]
 name = "maxwell-3ds"
 version = "0.1.0"
 edition = "2021"
+authors = ["spazzylemons"]
+description = "Spinning Maxwell cat"
+
+[[bin]]
+name = "maxwell"
+path = "src/main.rs"
+test = false
 
 [build-dependencies]
 wavefront_obj = "10"
@@ -15,3 +24,9 @@ symphonia = { version = "0.5.2", default-features = false, features = ["ogg", "v
 
 [profile.release]
 opt-level = "z"
+codegen-units = 1
+lto = true
+panic = "abort"
+
+[profile.release.package.compiler_builtins]
+rustflags = ["-Zshare-generics=off"]

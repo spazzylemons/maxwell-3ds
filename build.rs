@@ -1,8 +1,15 @@
-use std::{env, path::PathBuf, process::Command, io::{Read, Write}, fs::File, collections::HashMap};
+use std::{
+    collections::HashMap,
+    env,
+    fs::File,
+    io::{Read, Write},
+    path::PathBuf,
+    process::Command,
+};
 
 use wavefront_obj::obj::Primitive;
 
-pub fn parse_obj() {
+fn parse_obj() {
     let mut path = PathBuf::from(env::var("CARGO_MANIFEST_DIR").unwrap());
     path.push("assets");
     path.push("maxwell.obj");
@@ -15,18 +22,18 @@ pub fn parse_obj() {
         obj_file
     };
     let obj = wavefront_obj::obj::parse(&obj_file).unwrap();
-    let mut result = String::from("struct MaxwellModel { pub vertices: &'static [f32],");
+    let mut result = String::from("struct MaxwellModel {\n    pub vertices: &'static [f32],\n");
 
     let object = obj.objects.first().unwrap();
 
     for material in &object.geometry {
         if let Some(name) = &material.material_name {
-            result.push_str("pub ");
+            result.push_str("    pub ");
             result.push_str(name);
-            result.push_str(": &'static [u16],");
+            result.push_str(": &'static [u16],\n");
         }
     }
-    result.push_str("} const MAXWELL_MODEL: MaxwellModel = MaxwellModel { vertices: &");
+    result.push_str("}\n\n#[allow(clippy::approx_constant)]\n#[allow(clippy::unreadable_literal)]\nconst MAXWELL_MODEL: MaxwellModel = MaxwellModel {\n    vertices: &");
 
     let mut vertices = HashMap::new();
     let mut unrolled = vec![];
@@ -38,17 +45,22 @@ pub fn parse_obj() {
                 Primitive::Triangle(a, b, c) => vec![a, b, c],
             };
 
+            #[allow(clippy::cast_possible_truncation)]
             for index in indices {
-                let key = (index.0, index.1.unwrap());
+                let key = (index.0, index.1.unwrap(), index.2.unwrap());
                 if !vertices.contains_key(&key) {
                     let id = vertices.len();
                     let vertex = object.vertices[key.0];
                     let uv = object.tex_vertices[key.1];
+                    let normal = object.normals[key.2];
                     unrolled.push(vertex.x as f32);
                     unrolled.push(vertex.y as f32);
                     unrolled.push(vertex.z as f32);
                     unrolled.push(uv.u as f32);
                     unrolled.push(uv.v as f32);
+                    unrolled.push(normal.x as f32);
+                    unrolled.push(normal.y as f32);
+                    unrolled.push(normal.z as f32);
 
                     vertices.insert(key, id);
                 }
@@ -57,10 +69,11 @@ pub fn parse_obj() {
     }
 
     result.push_str(&format!("{unrolled:?}"));
-    result.push(',');
+    result.push_str(",\n");
 
     for material in &object.geometry {
         if let Some(name) = &material.material_name {
+            result.push_str("    ");
             result.push_str(name);
             result.push_str(": &");
             let mut the_indices = vec![];
@@ -72,26 +85,32 @@ pub fn parse_obj() {
                 };
 
                 for index in indices {
-                    let key = (index.0, index.1.unwrap());
+                    let key = (index.0, index.1.unwrap(), index.2.unwrap());
                     let id = *vertices.get(&key).unwrap();
                     the_indices.push(id);
                 }
             }
-            result.push_str(&format!("{the_indices:?},"));
+            result.push_str(&format!("{the_indices:?},\n"));
         }
     }
-    result.push_str("};");
+    result.push_str("};\n");
 
-    let mut file = File::create(PathBuf::from(env::var("OUT_DIR").unwrap()).join("maxwell.rs")).unwrap();
+    let mut file =
+        File::create(PathBuf::from(env::var("OUT_DIR").unwrap()).join("maxwell.rs")).unwrap();
     file.write_all(result.as_bytes()).unwrap();
 }
-
 
 fn parse_texture(name: &str) {
     let mut path = PathBuf::from(env::var("CARGO_MANIFEST_DIR").unwrap());
     path.push("assets");
-    println!("cargo:rerun-if-changed={}", path.join(format!("{name}.t3s")).display());
-    println!("cargo:rerun-if-changed={}", path.join(format!("{name}.png")).display());
+    println!(
+        "cargo:rerun-if-changed={}",
+        path.join(format!("{name}.t3s")).display()
+    );
+    println!(
+        "cargo:rerun-if-changed={}",
+        path.join(format!("{name}.png")).display()
+    );
 
     let mut cmd = Command::new("tex3ds");
     cmd.arg("-i");
@@ -99,9 +118,7 @@ fn parse_texture(name: &str) {
     cmd.arg("-o");
     cmd.arg(PathBuf::from(env::var("OUT_DIR").unwrap()).join(format!("{name}.t3x")));
     let status = cmd.spawn().unwrap().wait().unwrap();
-    if !status.success() {
-        panic!("failed to parse texture");
-    }
+    assert!(status.success(), "failed to parse texture");
 }
 
 fn main() {
@@ -116,9 +133,7 @@ fn main() {
     cmd.arg("-o");
     cmd.arg(PathBuf::from(env::var("OUT_DIR").unwrap()).join("shader.shbin"));
     let status = cmd.spawn().unwrap().wait().unwrap();
-    if !status.success() {
-        panic!("failed to compile shader");
-    }
+    assert!(status.success(), "failed to compile shader");
 
     parse_texture("body");
     parse_texture("whiskers");

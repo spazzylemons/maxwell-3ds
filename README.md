@@ -6,6 +6,14 @@ Displays Maxwell the cat on your 3DS.
 
 You will the 3DS devKitPro tools and [cargo-3ds](https://github.com/rust3ds/cargo-3ds).
 
+For release builds, run:
+
+    cargo +nightly 3ds build -Zbuild-std=panic_abort,std -Zbuild-std-features=panic_immediate_abort --release
+
+For debug builds, run:
+
+    cargo +nightly 3ds build
+
 ## License
 
 This project is licensed under the GNU General Public License, version 3 or later.
