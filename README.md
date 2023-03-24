@@ -16,7 +16,9 @@ For debug builds, run:
 
 ## License
 
-This project is licensed under the GNU General Public License, version 3 or later.
+Source code is licensed under the GNU General Public License, version 3 or later.
+The assets and application icon are not under this license, and are licensed to
+their respective owners.
 
 ## Credits
 
